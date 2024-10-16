@@ -735,9 +735,9 @@ def repro_run(options, mod, load_args):
             if isinstance(arg, torch.Tensor) and arg.is_cuda:
                 need_sync = True
                 break
+        compiled(list(args))
         if need_sync:
             synchronize()  # ensure segfaults are surfaced
-    return lambda: compiled(list(args))
 
 
 # TODO: lazily load the inputs or something, rather than cloning them
