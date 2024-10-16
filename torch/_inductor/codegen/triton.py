@@ -561,7 +561,6 @@ class TritonPrinter(PythonPrinter):
         Helper for max/min code genereration.
         cmp: > or <
         """
-        nargs = len(expr.args)
         if len(expr.args) == 1:
             return self._print(expr.args[0])
 
@@ -1603,9 +1602,6 @@ class TritonKernel(SIMDKernel):
                 ):
                     return None
 
-                def identity(expr: sympy.Expr) -> sympy.Expr:
-                    return expr
-
                 # Compute the ND block shape from the linear block size.
                 # Use CielDiv to round leading dimensions up to 1.
                 # Non-leading dimensions are clamped to the size of the iteration range,
@@ -1794,9 +1790,6 @@ class TritonKernel(SIMDKernel):
             index_str, "0" if lower else None, size_str, mask_str
         )
 
-        indirect = self.is_indirect_indexing(expr) or any(
-            isinstance(m, TritonCSEVariable) for m in indexing.mask_vars
-        )
         buffer = self.get_load_buffer(indexing)
         self.cse.generate(buffer, line, assignment=False)
 
@@ -2317,7 +2310,6 @@ class TritonKernel(SIMDKernel):
         self.filter_masks(masks)
         masks = sorted(masks)
         assert not self._load_mask, "ops.scan not supported inside ops.masked"
-        reduction_range_prefix = self.range_trees[-1].prefix
 
         broadcasted_values = []
         accumulators = []
@@ -2328,7 +2320,6 @@ class TritonKernel(SIMDKernel):
 
         for value, dtype in zip(values, dtypes):
             acc_type = triton_acc_type(dtype)
-            cond = " & ".join(masks)
 
             value_dtype = self.cse.generate(
                 self.compute,
@@ -2341,7 +2332,6 @@ class TritonKernel(SIMDKernel):
             broadcasted_values.append(value)
 
             acc_type = triton_acc_type(dtype)
-            cond = " & ".join(masks)
 
             if not self.persistent_reduction:
                 accumulator = self.cse.newvar()
@@ -2424,7 +2414,6 @@ class TritonKernel(SIMDKernel):
         assert (
             self.persistent_reduction
         ), "ops.sort is only supported in persistent reductions"
-        reduction_range_prefix = self.range_trees[-1].prefix
 
         cse_compute = functools.partial(self.cse.generate, self.compute)
         dim = self.triton_tensor_ndim() - 1
@@ -2515,7 +2504,7 @@ class TritonKernel(SIMDKernel):
 
     def codegen_kernel_benchmark(self, num_gb, grid=None):
         result = IndentedBuffer()
-        argdefs, call_args, signature, _ = self.args.python_argdefs()
+        _argdefs, call_args, signature, _ = self.args.python_argdefs()
 
         result.writelines(["", "", "def get_args():"])
         with result.indent():
@@ -3120,7 +3109,7 @@ class TritonScheduling(SIMDScheduling):
 
     def codegen_comment(self, node_schedule):
         wrapper = V.graph.wrapper_code
-        origins, detailed_origins = get_kernel_metadata(node_schedule, wrapper)
+        origins, _detailed_origins = get_kernel_metadata(node_schedule, wrapper)
         if origins:
             wrapper.writeline(origins)
 
@@ -3172,7 +3161,7 @@ class TritonScheduling(SIMDScheduling):
             # not use BracesBuffer, so we have no good indicator of a C++ buffer atm.
             src_code = src_code.replace("#pragma CMT", "#")
 
-            basename, _, kernel_path = get_path(code_hash(src_code.strip()), "py")
+            _basename, _, kernel_path = get_path(code_hash(src_code.strip()), "py")
 
             compile_wrapper = IndentedBuffer()
             compile_wrapper.writeline(f"async_compile.triton({subs_name!r}, '''")
